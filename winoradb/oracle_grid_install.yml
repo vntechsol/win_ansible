@@ -1,0 +1,36 @@
+---
+- name: Setting UPD and TCP dynamic port range for Oracle RAC.
+  win_shell: |
+    netsh int ipv4 set dynamicport udp start=9000 num=56000
+    netsh int ipv4 set dynamicport tcp start=9000 num=56000
+    netsh int ipv4 show dynamicport udp
+    netsh int ipv4 show dynamicport tcp
+
+- name: Deploy special Grid Oracle Database Configuration assistant.
+  win_copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ username }}"
+    group: "{{ group }}"
+  with_items:
+    - { src: 'files/{{ grid_install_file }}', dest: '{{ oracle_app_dir }}\{{ username }}\{{ oracle_home }}\install\response\{{ grid_install_file}}' }
+
+- name: Install Oracle Grid Database.
+  win_shell:
+    G:\app\oracle\product\19.0.0\dbhome_1\setup.exe -silent "ORA_INSTALL=G:\app\oracle\Inventory" -nowait -responseFile G:\app\oracle\product\19.0.0\dbhome_1\install\response\grid_install.rsp > C:\Windows\Temp\gridinstall.log
+  args:
+    creates: C:\Windows\Temp\gridinstall.log
+
+- name: Adding Windows Oracle Enterprise Manager firewall rules.
+  win_firewall_rule:
+    name: "{{ item.0 }}"
+    group: "{{ firewall_group }}"
+    localport: "{{ item.1 }}"
+    action: "{{ firewall_action }}"
+    direction: "{{ firewall_direction }}"
+    protocol: "{{ firewall_protocol }}"
+    state: "{{ status }}"
+    enabled: "{{ firewall_enabled }}"
+  with_together:
+    - "{{ firewall_name }}"
+    - "{{ firewall_port }}"

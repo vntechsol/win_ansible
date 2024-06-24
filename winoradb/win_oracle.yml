@@ -1,0 +1,133 @@
+---
+- name: Windows Oracle PreRequisites using Ansible
+  hosts: all
+
+  vars:
+    mode: 0755
+
+  tasks:
+  - name: set the default shell to PowerShell
+    win_regedit:
+      path: HKLM:\SOFTWARE\OpenSSH
+      name: DefaultShell
+      data: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+      type: string
+      state: present
+
+  - name: Configuring ntp.
+    win_shell: |
+      Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\w32time\Parameters" -Name "NtpServer" -Value "{{ ntp_time }}"
+      Restart-Service w32Time
+      w32tm /resync
+      w32tm /query /status
+
+  - name: Set timezone to 'GMT Standard Time' (GMT).
+    win_timezone:
+      timezone: "{{ win_timezone }}"
+
+  - name: Set region location.
+    win_region:
+      location: "{{ win_time_location }}"
+      format: "{{ win_time_format }}"
+      unicode_language: "{{ win_time_format }}"
+    register: win_time
+
+  - name: win_restart
+    win_reboot: 
+    when: win_time.restart_required
+
+  - name: Check host available.
+    win_ping:
+
+  - name: Create Windows local group.
+    win_group:
+      name: "{{ item }}"
+      state: "{{ status }}"
+    loop: "{{ group }}"
+
+  - name: Create Windows local user.
+    win_user:
+      name: "{{ username }}"
+      state: "{{ status }}"
+      description: "{{ username }} user"
+      password: "{{ password }}"
+      groups: "{{ group }}"
+      groups_action: "{{ groups_action }}"
+
+  - name: Transfer Microsoft Visual C++ Redistribution to target machine.
+    win_copy:
+      src: "files/{{ vc_redist }}"
+      dest: "{{ winget_dest }}"
+      mode: "{{ mode }}"
+
+  - name: Install Microsoft Visual C++.
+    win_shell: >
+      "{{ winget_dest }} /q /nostart > {{ winget_log }}"
+    args:
+      executable: powershell.exe
+      chdir: "{{ winget_dir }}"
+      creates: "{{ winget_log }}"
+
+  - name: Deploy the Windows disk initialize script.
+    win_copy:
+      src: "files/{{ windisk_init }}"
+      dest: "{{ windisk_dest }}"
+
+  - name: Initialize the storage data disks.
+    win_shell: "powershell.exe -ExecutionPolicy unrestricted -NoProfile -NonInteractive -File {{  winget_dir }}/{{ windisk_init }} > {{ windiskinit_log }}"
+    args:
+      chdir: "{{ winget_dir }}"
+      creates: "{{ windiskinit_log }}"
+
+  - name: Get disk facts.
+    win_disk_facts:
+
+  - name: Disk partition.
+    win_partition:
+      drive_letter: "{{ item.0 }}"
+      partition_size: "{{ disksize }}"
+      disk_number: "{{ item.1 }}"
+      partition_number: "{{ item.2 }}"
+      state: "{{ disk_state }}"
+    with_together:
+      - "{{ driveletter }}"
+      - "{{ disknumber }}"
+      - "{{ disknumber }}"
+    when: ansible_facts.disks[2].partitions is undefined
+
+  - name: Format disk.
+    win_format:
+      drive_letter: "{{ item.0 }}"
+      file_system: "{{ disk_filesystem }}"
+      new_label: "{{ disk_label }}"
+    with_together:
+      - "{{ driveletter }}"
+    when: ansible_facts.disks[2].partitions is undefined
+
+  - name: Create a directory to store oracle source.
+    win_file:
+      path: "{{ oracle_app_dir }}\\{{ username }}\\{{ oracle_home }}"
+      state: "{{ oracle_state }}"
+      owner: "{{ username }}"
+      group: "{{ group }}"
+      mode: "{{ mode }}"
+
+  - name: Deploy Oracle source software.
+    win_copy:
+      src: "{{ oracle_source }}"
+      dest: "{{ oracle_app_dir }}\\{{ oracle_software }}"
+      mode: "{{ mode }}"
+
+  - name: Extract the Oracle source software.
+    win_unzip:
+      src: "{{ oracle_app_dir }}\\{{ oracle_software }}"
+      dest: "{{ oracle_app_dir }}\\{{ username }}\\{{ oracle_home }}"
+      remote_src: "{{ remotesource }}"
+      owner: "{{ username }}"
+      group: "{{ oracle_group }}"
+      mode: "{{ mode }}"
+      creates: "{{ oracle_app_dir }}\\{{ username }}\\{{ oracle_home }}\\{{ oracle_install_dir }}"
+
+  - name: Install Oracle Database.
+    include_tasks: "{{ oracle_install }}.yml"
+    when: ansible_os_family == "Windows"

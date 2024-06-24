@@ -1,0 +1,46 @@
+- name: Working with Windows using Ansible
+  hosts: all
+
+  tasks:
+  - name: set the default shell to PowerShell
+    win_regedit:
+      path: HKLM:\SOFTWARE\OpenSSH
+      name: DefaultShell
+      data: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+      type: string
+      state: present
+
+  - name: Create Windows local group.
+    win_group:
+      name: "{{ item }}"
+      state: "{{ status }}"
+    loop: "{{ group }}"
+
+  - name: Create Windows local user.
+    win_user:
+      name: "{{ username }}"
+      description: "{{ username }} user"
+      password: "{{ password }}"
+      state: "{{ status }}"
+      groups: "{{ group }}"
+      groups_action: "{{ groups_action }}"
+
+  - name: Add "{{ username }}" to Administrators group.
+    win_shell: "Add-LocalGroupMember -Group \"Administrators\" -Member \"{{ username }}\" > {{ username }}.log"
+    args:
+      chdir: "{{ wint_dir }}"
+      creates: "{{ username }}.log"
+
+  - name: Ensure "{{ username }}" user exists in RDP group.
+    win_group_membership:
+      name: Remote Desktop Users
+      members:
+        - "{{ username }}"
+      state: "{{ status }}"
+
+  - name: Configuring ntp.
+    win_shell: |
+      Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\w32time\Parameters" -Name "NtpServer" -Value "{{ ntp_time }}"
+      Restart-Service w32Time
+      w32tm /resync
+      w32tm /query /status

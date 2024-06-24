@@ -1,0 +1,49 @@
+---
+- name: Deploy db_install.rsp oracle installation file.
+  win_copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ username }}"
+    group: "{{ oracle_group }}"
+  with_items:
+    - { src: 'files/{{ db_install_file }}', dest: '{{ oracle_app_dir }}\{{ username }}\product\19.0.0\dbhome_1\install\response\{{ db_install_file }}' }
+
+- name: Create Oracle Inventory directory.
+  win_file:
+    path: "{{ oracle_app_dir }}\\{{ username }}\\{{ oracle_inventory }}"
+    state: "{{ oracle_state }}"
+    owner: "{{ username }}"
+    group: "{{ oracle_group }}"
+    mode: "{{ mode }}"
+
+- name: Oracle Database Installation - (Software) only.
+  win_shell: >
+    G:\app\oracle\product\19.0.0\dbhome_1\setup.exe -silent "ORA_INSTALL=G:\app\oracle\Inventory" -nowait -responseFile G:\app\oracle\product\19.0.0\dbhome_1\install\response\db_install.rsp > C:\Windows\Temp\install.log
+  args:
+    creates: C:\Windows\Temp\install.log
+
+- name: Adding Windows Oracle Enterprise Manager firewall rules.
+  win_firewall_rule:
+    name: "{{ item.0 }}"
+    group: "{{ firewall_group }}"
+    localport: "{{ item.1 }}"
+    action: "{{ firewall_action }}"
+    direction: "{{ firewall_direction }}"
+    protocol: "{{ firewall_protocol }}"
+    state: "{{ status }}"
+    enabled: "{{ firewall_enabled }}"
+  with_together:
+    - "{{ firewall_name }}"
+    - "{{ firewall_port }}"
+
+- name: Windows file stat.
+  win_stat:
+    path: C:\Windows\Temp\install.log
+  register: oinstall
+
+- name: Configure oracle database listener via netca.
+  win_shell: >
+    G:\app\oracle\product\19.0.0\dbhome_1\bin\netca /silent /responsefile G:\app\oracle\product\19.0.0\dbhome_1\assistants\netca\netca.rsp > C:\Windows\Temp\olistener_config.log
+  args:
+    creates: C:\Windows\Temp\olistener_config.log
+  when: oinstall is defined

@@ -1,0 +1,8 @@
+[win]
+10.33.61.136
+
+[win:vars]
+ansible_user=az-user
+ansible_password=$1$OLG8GHbK$.Jv6Ty2KwAPhlY9dc9f6p.
+ansible_connection=winrm
+ansible_winrm_server_cert_validation=ignore

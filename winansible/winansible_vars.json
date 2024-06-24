@@ -1,0 +1,9 @@
+{
+	"username": "azadmin",
+	"password": "$1$uJu1Qlck$UBFsaJAP3HhhH8rq/kDEG0",
+        "status": "present",
+        "group": ["admin", "appadmin"],
+	"wint_dir": "C:\\Windows\\Temp",
+	"groups_action": "add",
+        "ntp_time": "0.uk.pool.ntp.org"
+}
